@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoundRadar | Music Release Tracker</title>
+    <!-- Google Fonts: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Background mesh glows -->
+    <div class="mesh-glow glow-1"></div>
+    <div class="mesh-glow glow-2"></div>
+    <div class="mesh-glow glow-3"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 100 100" class="radar-svg">
+                        <circle cx="50" cy="50" r="45" class="radar-ring radar-ring-1"></circle>
+                        <circle cx="50" cy="50" r="30" class="radar-ring radar-ring-2"></circle>
+                        <circle cx="50" cy="50" r="15" class="radar-ring radar-ring-3"></circle>
+                        <line x1="50" y1="50" x2="50" y2="5" class="radar-sweep"></line>
+                        <circle cx="50" cy="50" r="4" class="radar-center"></circle>
+                    </svg>
+                </div>
+                <div>
+                    <h1>Sound<span>Radar</span></h1>
+                    <p class="subtitle">Personal Music Release Monitor</p>
+                </div>
+            </div>
+
+            <!-- Library Scanner & Manual Search -->
+            <div class="header-controls">
+                <!-- Scan section -->
+                <div class="control-box glass">
+                    <div class="control-row">
+                        <input type="text" id="scan-path-input" value="/Users/athanasios/Music/Downloaded" placeholder="/path/to/music/folder">
+                        <button id="scan-btn" class="btn btn-secondary" title="Scan downloaded music for artist names">
+                            <i class="fa-solid fa-folder-open"></i> Scan Local
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Add Artist search box -->
+                <div class="search-box-container">
+                    <div class="search-box glass">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="artist-search-input" placeholder="Search to follow new artist..." autocomplete="off">
+                        <div id="search-spinner" class="spinner hidden"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
+                    </div>
+                    <!-- Autocomplete dropdown suggestions -->
+                    <div id="search-suggestions" class="search-suggestions glass hidden"></div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Bar -->
+        <section class="stats-bar glass">
+            <div class="stat-item">
+                <span class="stat-value" id="stat-artists-count">0</span>
+                <span class="stat-label">Artists Tracked</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="stat-pending-count">0</span>
+                <span class="stat-label">New Releases</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="stat-downloaded-count">0</span>
+                <span class="stat-label">Downloaded</span>
+            </div>
+            <div class="action-item">
+                <button id="check-releases-btn" class="btn btn-primary btn-glow">
+                    <i class="fa-solid fa-arrows-rotate"></i> Check For Releases
+                </button>
+            </div>
+        </section>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <!-- Left panel: Navigation & Filter Tabs -->
+            <aside class="sidebar glass">
+                <div class="nav-tabs">
+                    <button class="nav-tab active" data-tab="releases">
+                        <i class="fa-solid fa-music"></i> Releases Feed
+                    </button>
+                    <button class="nav-tab" data-tab="artists">
+                        <i class="fa-solid fa-users"></i> Followed Artists
+                    </button>
+                </div>
+
+                <!-- Active Filters (only visible/enabled on Releases Feed) -->
+                <div id="feed-filters" class="filters-section">
+                    <h3>Filter Feed</h3>
+                    
+                    <div class="filter-group">
+                        <label>Status</label>
+                        <select id="filter-status">
+                            <option value="pending" selected>New / Pending</option>
+                            <option value="downloaded">Downloaded</option>
+                            <option value="dismissed">Dismissed</option>
+                            <option value="all">All Releases</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Release Type</label>
+                        <select id="filter-type">
+                            <option value="all">All Types</option>
+                            <option value="album">Albums</option>
+                            <option value="single">Singles / EPs</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Search Releases</label>
+                        <div class="filter-input-wrapper">
+                            <input type="text" id="filter-search" placeholder="Type artist or title...">
+                            <i class="fa-solid fa-search"></i>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Right panel: Content Area -->
+            <section class="content-panel">
+                <!-- Releases Tab Content -->
+                <div id="tab-content-releases" class="tab-pane active">
+                    <div class="panel-header">
+                        <h2>Latest Releases</h2>
+                        <span class="results-info" id="releases-info-text">Showing latest releases</span>
+                    </div>
+                    <!-- Releases Grid -->
+                    <div class="releases-grid" id="releases-container">
+                        <!-- Releases rendered dynamically -->
+                        <div class="empty-state">
+                            <i class="fa-solid fa-record-vinyl"></i>
+                            <p>No releases found. Click "Check For Releases" to look up new music or add/scan artists.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Artists Tab Content -->
+                <div id="tab-content-artists" class="tab-pane">
+                    <div class="panel-header">
+                        <h2>Followed Artists</h2>
+                        <div class="filter-input-wrapper artist-filter-wrapper">
+                            <input type="text" id="artist-filter-search" placeholder="Filter artists list...">
+                            <i class="fa-solid fa-search"></i>
+                        </div>
+                    </div>
+                    <!-- Artists Grid -->
+                    <div class="artists-grid" id="artists-container">
+                        <!-- Artists rendered dynamically -->
+                        <div class="empty-state">
+                            <i class="fa-solid fa-user-slash"></i>
+                            <p>You aren't following any artists yet. Use the search bar in the header or scan your library.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Loader Modal -->
+    <div id="loader-modal" class="modal hidden">
+        <div class="modal-content glass">
+            <div class="modal-loader">
+                <svg viewBox="0 0 100 100" class="spinner-svg">
+                    <circle cx="50" cy="50" r="40" class="spinner-ring"></circle>
+                </svg>
+                <i class="fa-solid fa-radar fa-spin-pulse radar-center-icon"></i>
+            </div>
+            <h3 id="loader-title">Scanning Files...</h3>
+            <p id="loader-text">Please stand by, analyzing your music directory headers.</p>
+        </div>
+    </div>
+
+    <!-- Main JS Application script -->
+    <script src="/static/app.js"></script>
+</body>
+</html>
