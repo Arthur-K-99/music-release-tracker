@@ -29,7 +29,7 @@ python3 db.py
 echo ""
 echo "Starting server..."
 echo "Open your web browser and go to:"
-echo "👉 http://127.0.0.1:5000"
+echo "👉 http://127.0.0.1:5001"
 echo ""
 echo "Press Ctrl+C to terminate the server."
 echo "========================================="
