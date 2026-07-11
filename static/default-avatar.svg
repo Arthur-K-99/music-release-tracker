@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="SoundRadar placeholder artwork">
+  <defs>
+    <radialGradient id="bg" cx="38%" cy="32%" r="80%">
+      <stop offset="0" stop-color="#2b3037"/>
+      <stop offset="1" stop-color="#111418"/>
+    </radialGradient>
+    <linearGradient id="sweep" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#ffb08f"/>
+      <stop offset="1" stop-color="#ff6b35"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="28" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="82" fill="none" stroke="#f4f1e9" stroke-opacity=".12" stroke-width="2"/>
+  <circle cx="128" cy="128" r="56" fill="none" stroke="#f4f1e9" stroke-opacity=".13" stroke-width="2"/>
+  <circle cx="128" cy="128" r="30" fill="none" stroke="#f4f1e9" stroke-opacity=".16" stroke-width="2"/>
+  <path d="M128 128 185 69a82 82 0 0 1 25 59Z" fill="url(#sweep)" fill-opacity=".18"/>
+  <path d="M128 128 185 69" stroke="url(#sweep)" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="128" cy="128" r="8" fill="#ff6b35"/>
+  <circle cx="128" cy="128" r="15" fill="none" stroke="#ff6b35" stroke-opacity=".28"/>
+  <circle cx="166" cy="91" r="4" fill="#a8f0cf"/>
+  <circle cx="166" cy="91" r="9" fill="none" stroke="#a8f0cf" stroke-opacity=".25"/>
+</svg>

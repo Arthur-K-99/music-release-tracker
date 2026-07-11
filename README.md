@@ -1,79 +1,111 @@
-# SoundRadar 📡
+# SoundRadar
 
-SoundRadar is a self-hosted, lightweight web application designed to help you keep track of new and upcoming album and single releases from your favorite artists. It is specifically designed to complement offline downloading workflows (such as `spotiflac next`) by scanning your existing music library, resolving artist profiles, and fetching new releases.
+SoundRadar is a local-first release desk for music collectors. It scans an existing audio library for artist names, lets you confirm those artists against Deezer, and keeps a focused queue of recent and upcoming releases.
 
-![SoundRadar Cover](static/default-avatar.png)
+The guiding rule is simple: **new music, less catalog noise**. SoundRadar does not silently match ambiguous names and does not import an artist's entire history into the default queue.
 
-## Key Features
+## What v2 changes
 
-*   **Local Library Scanning:** Walks your download directory (defaults to `/Users/athanasios/Music/Downloaded`), reads metadata tags (MP3, FLAC, M4A, etc.) using `mutagen`, and falls back to parsing filename structures like `Song Title - Artist` to build your artist list.
-*   **Asynchronous Release Check:** Utilizes a non-blocking background thread worker to query the public Deezer API for new releases. This ensures the app is responsive even with hundreds of followed artists and prevents web timeouts.
-*   **Rate-Limit Safety:** Implements polite request throttling (`0.15s` delay between API hits) to respect the Deezer API rate limits.
-*   **Persistent Tracking Database:** Uses a local SQLite database (`tracker.db`) to record followed artists and fetched release states (`pending`, `downloaded`, `dismissed`) so you never miss an alert or see duplicates.
-*   **Premium Glassmorphic Dashboard:** Designed with vibrant neon violet-pink styling, dynamic radar animation, smooth scale transitions, and instant client-side search and filters.
-*   **Quick Copy Workflows:** Release cards feature quick-action buttons to copy track info (`Song Title - Artist`) or copy direct Deezer links to your clipboard, generating animated success toasts.
-*   **Easy Setup:** Bootstraps itself via a single script that manages Python virtual environment setups and runs the application.
+- **Trusted artist matching:** library scans add unresolved names; only artists explicitly selected from Deezer are checked for releases.
+- **Recent release window:** checks keep releases from the last 90 days through the next year by default. Implausible dates such as 2099 are ignored.
+- **Paginated release API:** status, type, date, and text filters run in SQLite, with true database totals.
+- **Safe background jobs:** release checks and library scans expose progress without blocking requests.
+- **Persistent migration:** existing `tracker.db` files are upgraded additively; releases and statuses are preserved.
+- **Accessible release desk:** compact cards, semantic labels, keyboard-friendly controls, reduced-motion support, and no external font/icon dependencies.
 
----
+## Quick start
 
-## File Structure
+Requirements: Python 3.10+ and an internet connection for Deezer lookups.
 
-```
-├── app.py                  # Flask server endpoints & background worker threads
-├── db.py                   # SQLite schema initialization and database queries
-├── scanner.py              # Recursive library audio tag/filename parser
-├── requirements.txt        # Python package dependencies
-├── run.sh                  # Shell script launcher (automates venv setup and execution)
-├── .gitignore              # Protects privacy (excludes tracker.db, .venv, etc.)
-├── README.md               # Application documentation
-├── templates/
-│   └── index.html          # Frontend SPA dashboard structure
-└── static/
-    ├── app.js              # Frontend state, API handling, and progress polling
-    ├── style.css           # Premium glassmorphic styling & radar keyframe sweeps
-    └── default-avatar.png  # Neon record vinyl placeholder asset
+```bash
+git clone https://github.com/Arthur-K-99/music-release-tracker.git
+cd music-release-tracker
+chmod +x run.sh
+./run.sh
 ```
 
----
+Open [http://127.0.0.1:5001](http://127.0.0.1:5001).
 
-## Prerequisites
+The launcher creates `.venv`, installs dependencies when `requirements.txt` changes, initializes the SQLite schema, and starts the local Flask server.
 
-*   **OS:** macOS / Linux / Windows
-*   **Python:** Python 3.10+ (tested on Python 3.14)
-*   **Git:** Configured locally (used for publishing)
+## Workflow
 
----
+1. Open **Library settings**, choose your music directory, and scan it.
+2. Open **Artists**. Unresolved names are clearly marked.
+3. Use **Find match** or the top search box and choose the correct Deezer artist.
+4. Click **Check releases**.
+5. Copy release info/links, mark downloads complete, or dismiss unwanted releases.
 
-## Installation & Setup
+Existing catalog entries remain accessible by choosing **All history** in the Window filter.
 
-1.  **Clone or Relocate Project:**
-    Ensure the folder structure is set up in your projects directory:
-    ```bash
-    cd /Users/athanasios/Projects/music-release-tracker
-    ```
+## Upgrading from the original version
 
-2.  **Run the Launcher:**
-    Execute the launcher script. It will automatically check for a local Python virtual environment, install dependencies (`flask`, `mutagen`, `requests`), initialize the SQLite database structure, and start the local Flask server:
-    ```bash
-    chmod +x run.sh
-    ./run.sh
-    ```
+No manual database migration is required. On startup, SoundRadar adds the v2 artist metadata columns and indexes while preserving existing artists, releases, and statuses.
 
-3.  **Open the Web Dashboard:**
-    Open your favorite web browser and go to:
-    👉 **[http://127.0.0.1:5000](http://127.0.0.1:5000)**
+- Artists that already have a Deezer ID become **confirmed**.
+- Scanned artists without a Deezer ID become **unresolved** and are skipped during checks until you choose a match.
+- Historical releases remain in SQLite; the default queue shows only the configured recent window.
+- Existing same-artist, same-title, same-date editions are collapsed in the interface without deleting stored records.
 
----
+Backing up `tracker.db` before any major application upgrade is still recommended.
 
-## How to Use SoundRadar
+## Configuration
 
-1.  **Seed Your Artist Library:**
-    *   **Auto-Scan:** Enter the path to your downloaded music (e.g. `/Users/athanasios/Music/Downloaded`) in the path input box in the header and click **Scan Local**. SoundRadar will analyze your files and follow every unique artist found.
-    *   **Manual Search:** Type an artist's name in the header search bar. A dropdown list of suggestions will appear from Deezer. Click an artist to follow them.
-2.  **Check for New Releases:**
-    *   Click the **Check For Releases** button in the stats bar.
-    *   A radar modal overlay will appear showing real-time progress as SoundRadar queries Deezer for your artists.
-3.  **Process Your Release Feed:**
-    *   **Copy Info / Link:** Click the copy icons to copy `Song - Artist` or the Deezer URL to your clipboard.
-    *   **Download:** Paste the links/search queries into your `spotiflac next` GUI to queue downloads.
-    *   **Manage State:** Click the checkmark to mark a release as **Downloaded** or the trash icon to **Dismiss** it. Use the sidebar tabs and selectors to filter the feed.
+Copy `.env.example` to `.env` to customize local settings:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SOUNDRADAR_LIBRARY_PATH` | `~/Music/Downloaded` | Default library scan path |
+| `SOUNDRADAR_LOOKBACK_DAYS` | `90` | Past release window |
+| `SOUNDRADAR_FUTURE_DAYS` | `365` | Maximum upcoming release window |
+| `SOUNDRADAR_PORT` | `5001` | Local server port |
+| `SOUNDRADAR_DB_PATH` | `./tracker.db` | SQLite database location |
+| `SOUNDRADAR_DEBUG` | `0` | Set to `1` for Flask debug mode |
+
+## Tests
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+The suite uses temporary databases and does not modify `tracker.db`.
+
+## Local API
+
+The browser interface uses a small JSON API:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/stats` | Accurate artist and release totals for a date window |
+| `GET /api/releases` | Paginated status, type, date, and text filtering |
+| `POST /api/releases/check` | Start a confirmed-artist release check |
+| `GET /api/releases/check/status` | Read release-check progress and errors |
+| `POST /api/scan` | Start an asynchronous local-library scan |
+| `GET /api/scan/status` | Read scan progress |
+| `GET /api/artists` | List followed artists and resolution state |
+| `POST /api/artists` | Confirm a selected Deezer artist |
+
+Mutation endpoints validate statuses and return `404` when the target record does not exist. Release pages are capped at 100 records per request.
+
+## Project structure
+
+```text
+app.py                 Flask API and background jobs
+db.py                  SQLite schema, migrations, queries, and stats
+scanner.py             Audio tag and filename artist extraction
+templates/index.html   Release desk structure
+static/app.js           Client state and safe DOM rendering
+static/style.css        Responsive visual system
+tests/                  Scanner, database, and API regression tests
+.env.example            Optional local configuration template
+CHANGELOG.md            User-facing release history
+run.sh                  Local launcher
+```
+
+## Data and privacy
+
+SoundRadar binds to `127.0.0.1`. Library filenames and paths stay local; artist and release queries are sent to Deezer when you search or run a release check. `tracker.db`, `.env`, and the virtual environment are ignored by Git.

@@ -28,16 +28,18 @@ def extract_artist_from_filename(filename):
         return clean_artist_name(artist)
     return ""
 
-def scan_directory(directory_path):
+def scan_directory(directory_path, progress_callback=None):
     artists = set()
-    if not os.path.exists(directory_path):
+    if not os.path.isdir(directory_path):
         return list(artists)
-        
+
+    processed = 0
     for root, _, files in os.walk(directory_path):
         for file in files:
             if not file.lower().endswith(SUPPORTED_EXTENSIONS):
                 continue
-                
+
+            processed += 1
             filepath = os.path.join(root, file)
             tag_artist = ""
             try:
@@ -55,12 +57,17 @@ def scan_directory(directory_path):
                 
             if artist and artist.lower() not in ('unknown', 'various artists', 'various', 'va'):
                 artists.add(artist)
-                
+
+            if progress_callback and (processed == 1 or processed % 50 == 0):
+                progress_callback(processed, len(artists), filepath)
+
+    if progress_callback:
+        progress_callback(processed, len(artists), "")
     return sorted(list(artists))
 
 if __name__ == "__main__":
     import sys
-    path = sys.argv[1] if len(sys.argv) > 1 else "/Users/athanasios/Music/Downloaded"
+    path = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/Music/Downloaded")
     print(f"Scanning: {path}")
     results = scan_directory(path)
     print(f"Found {len(results)} artists:")
