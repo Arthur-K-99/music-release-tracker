@@ -23,6 +23,7 @@ DEFAULT_LIBRARY_PATH = os.path.expanduser(
 
 VALID_STATUSES = {"pending", "downloaded", "dismissed"}
 VALID_TYPES = {"all", "album", "single"}
+VALID_FEEDBACK = {"love", "not_for_me", "already_heard"}
 
 job_lock = threading.Lock()
 check_status = {
@@ -32,6 +33,7 @@ check_status = {
     "processed": 0,
     "total": 0,
     "new_releases": 0,
+    "new_tracks": 0,
     "skipped_unresolved": 0,
     "errors": [],
     "finished_at": None,
@@ -107,7 +109,7 @@ def _fetch_recent_releases(artist):
             release_date = item.get("release_date")
             if not _release_in_window(release_date):
                 continue
-            added = db.add_release(
+            result = db.upsert_release(
                 artist_id=artist["id"],
                 title=item.get("title") or "Untitled release",
                 type=item.get("record_type") or "album",
@@ -117,9 +119,47 @@ def _fetch_recent_releases(artist):
                 cover_url=item.get("cover_medium") or item.get("cover"),
                 status="pending",
             )
-            if added:
+            if result["created"]:
                 with job_lock:
                     check_status["new_releases"] += 1
+            if result["id"] and not db.release_has_tracks(result["id"]):
+                try:
+                    _fetch_release_tracks(result["id"], item["id"])
+                except Exception as exc:
+                    _append_check_error(
+                        f"{artist['name']} — {item.get('title') or 'Untitled release'} tracks: {exc}"
+                    )
+        pages += 1
+        url = payload.get("next")
+
+
+def _fetch_release_tracks(release_id, deezer_release_id):
+    url = f"https://api.deezer.com/album/{deezer_release_id}/tracks?limit=100"
+    pages = 0
+    while url and pages < 5:
+        if _job_snapshot(check_status)["cancel_requested"]:
+            return
+        time.sleep(0.1)
+        payload = _request_json(url)
+        for item in payload.get("data", []):
+            track_id = item.get("id")
+            if not track_id:
+                continue
+            added = db.add_track(
+                release_id=release_id,
+                title=item.get("title") or item.get("title_short") or "Untitled track",
+                deezer_id=str(track_id),
+                link=item.get("link") or f"https://www.deezer.com/track/{track_id}",
+                preview_url=item.get("preview"),
+                duration=item.get("duration") or 0,
+                provider_rank=item.get("rank") or 0,
+                track_position=item.get("track_position") or 0,
+                disk_number=item.get("disk_number") or 1,
+                explicit_lyrics=item.get("explicit_lyrics") or False,
+            )
+            if added:
+                with job_lock:
+                    check_status["new_tracks"] += 1
         pages += 1
         url = payload.get("next")
 
@@ -166,12 +206,19 @@ def scan_library_worker(path):
                 current_file=os.path.basename(current_file) if current_file else "",
             )
 
-        found_artists = scanner.scan_directory(path, progress_callback=progress)
+        summary = scanner.scan_directory_summary(path, progress_callback=progress)
         added = 0
-        for name in found_artists:
-            if db.upsert_artist(name)["created"]:
+        db.reset_artist_library_counts()
+        for name in summary["artists"]:
+            result = db.upsert_artist(name)
+            if result["created"]:
                 added += 1
-        _job_update(scan_status, artists_found=len(found_artists), artists_added=added)
+            db.update_artist_library_counts(
+                result["id"],
+                track_count=summary["track_counts"].get(name, 0),
+                album_count=summary["album_counts"].get(name, 0),
+            )
+        _job_update(scan_status, artists_found=len(summary["artists"]), artists_added=added)
     except Exception as exc:
         _job_update(scan_status, error=str(exc))
     finally:
@@ -229,6 +276,16 @@ def remove_artist(artist_id):
     if not db.remove_artist(artist_id):
         return jsonify({"error": "Artist not found."}), 404
     return jsonify({"success": True})
+
+
+@app.post("/api/artists/<int:artist_id>/favorite")
+def favorite_artist(artist_id):
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data.get("favorite"), bool):
+        return jsonify({"error": "favorite must be true or false."}), 400
+    if not db.set_artist_favorite(artist_id, data["favorite"]):
+        return jsonify({"error": "Artist not found."}), 404
+    return jsonify({"success": True, "favorite": data["favorite"]})
 
 
 @app.post("/api/scan")
@@ -294,6 +351,38 @@ def get_stats():
     return jsonify(db.get_stats(days=days))
 
 
+@app.get("/api/radar")
+def get_radar():
+    mode = request.args.get("mode", "radar")
+    if mode not in {"quick", "radar"}:
+        return jsonify({"error": "mode must be quick or radar."}), 400
+    try:
+        days = _int_arg("days", LOOKBACK_DAYS, 1, 3650)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(db.get_radar(limit=5 if mode == "quick" else 12, days=days))
+
+
+@app.post("/api/radar/seen")
+def mark_radar_seen():
+    data = request.get_json(silent=True) or {}
+    track_ids = data.get("track_ids")
+    if not isinstance(track_ids, list) or len(track_ids) > 15:
+        return jsonify({"error": "track_ids must be a list of up to 15 items."}), 400
+    return jsonify({"success": True, "marked": db.mark_tracks_seen(track_ids)})
+
+
+@app.post("/api/tracks/<int:track_id>/feedback")
+def update_track_feedback(track_id):
+    data = request.get_json(silent=True) or {}
+    feedback = data.get("feedback")
+    if feedback not in VALID_FEEDBACK:
+        return jsonify({"error": "Invalid track feedback."}), 400
+    if not db.set_track_feedback(track_id, feedback):
+        return jsonify({"error": "Track not found."}), 404
+    return jsonify({"success": True, "feedback": feedback})
+
+
 @app.post("/api/releases/<int:release_id>/status")
 def update_release_status(release_id):
     data = request.get_json(silent=True) or {}
@@ -317,6 +406,7 @@ def trigger_releases_check():
             processed=0,
             total=0,
             new_releases=0,
+            new_tracks=0,
             skipped_unresolved=0,
             errors=[],
             finished_at=None,

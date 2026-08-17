@@ -12,6 +12,13 @@ The guiding rule is simple: **new music, less catalog noise**. SoundRadar does n
 - **Safe background jobs:** release checks and library scans expose progress without blocking requests.
 - **Persistent migration:** existing `tracker.db` files are upgraded additively; releases and statuses are preserved.
 - **Accessible release desk:** compact cards, semantic labels, keyboard-friendly controls, reduced-motion support, and no external font/icon dependencies.
+- **Your Radar:** a finite song-level shortlist ranked from favorites, local-library affinity, download history, freshness, and lightweight feedback.
+
+## Your Radar
+
+Your Radar turns the recent release window into 5 quick picks or a fuller shortlist of up to 12 songs. Every pick includes a concise reason, such as **Favorite artist**, **New this week**, or the number of that artist's tracks in your local library. No recommendation follows an artist or changes the release queue.
+
+Mark followed artists as favorites from the **Artists** view, then use **Love it**, **Not for me**, and **Already heard** on song picks. Shown or rated tracks are kept out of later sessions, duplicate versions are collapsed, and no artist can take more than two spots. A release check fetches track lists for recent releases, including recent releases saved before this feature was added.
 
 ## Quick start
 
@@ -34,7 +41,8 @@ The launcher creates `.venv`, installs dependencies when `requirements.txt` chan
 2. Open **Artists**. Unresolved names are clearly marked.
 3. Use **Find match** or the top search box and choose the correct Deezer artist.
 4. Click **Check releases**.
-5. Copy release info/links, mark downloads complete, or dismiss unwanted releases.
+5. Open **Your Radar** for the short list, or **Everything new** for the complete release desk.
+6. Copy release info/links, mark downloads complete, or dismiss unwanted releases.
 
 Existing catalog entries remain accessible by choosing **All history** in the Window filter.
 
@@ -88,6 +96,10 @@ The browser interface uses a small JSON API:
 | `GET /api/scan/status` | Read scan progress |
 | `GET /api/artists` | List followed artists and resolution state |
 | `POST /api/artists` | Confirm a selected Deezer artist |
+| `POST /api/artists/:id/favorite` | Add or remove a followed artist from Favorites |
+| `GET /api/radar` | Return a quick (5) or full (up to 12) explainable song shortlist |
+| `POST /api/radar/seen` | Persist songs shown during the current session |
+| `POST /api/tracks/:id/feedback` | Record Love it, Not for me, or Already heard feedback |
 
 Mutation endpoints validate statuses and return `404` when the target record does not exist. Release pages are capped at 100 records per request.
 

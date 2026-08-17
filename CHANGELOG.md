@@ -6,6 +6,10 @@ Notable SoundRadar changes are documented here.
 
 ### Added
 
+- Your Radar song overview with five-pick quick glance and twelve-pick full views.
+- Explainable recommendation scoring from Favorites, local-library frequency, download history, recency, and provider popularity tie-breaking.
+- Track-level release storage, lightweight song feedback, seen-item suppression, duplicate-version collapse, and per-artist diversity limits.
+- A small Deeper Listens section for the strongest recent albums and EPs.
 - Editorial, responsive release-desk interface for desktop and mobile.
 - Confirmed and unresolved artist states to prevent ambiguous automatic matching.
 - Configurable recent and upcoming release windows.
@@ -17,6 +21,7 @@ Notable SoundRadar changes are documented here.
 
 ### Changed
 
+- Release checks now fetch track listings for recent releases so Radar rankings never require historical-catalog imports.
 - Release checks now inspect only confirmed artists and stop importing irrelevant catalog history.
 - Deezer requests now use bounded pagination, timeouts, retry backoff, and explicit error handling.
 - Existing logical duplicate editions are collapsed in the interface without deleting data.

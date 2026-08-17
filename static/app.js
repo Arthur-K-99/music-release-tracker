@@ -1,13 +1,16 @@
 const state = {
     artists: [],
     releases: [],
+    radar: null,
+    radarMode: "radar",
+    displayedTrackIds: new Set(),
     stats: {},
     page: 1,
     pages: 1,
     total: 0,
     artistPage: 1,
     artistPages: 1,
-    activeTab: "releases",
+    activeTab: "radar",
     checkTimer: null,
     scanTimer: null,
     searchController: null,
@@ -23,6 +26,11 @@ const elements = {
     scanButton: $("scan-btn"),
     libraryToggle: $("toggle-library-btn"),
     libraryPanel: $("library-panel"),
+    radarPicks: $("radar-picks"),
+    radarSummary: $("radar-summary"),
+    deeperSection: $("deeper-section"),
+    deeperListens: $("deeper-listens"),
+    everythingNew: $("everything-new-btn"),
     filterStatus: $("filter-status"),
     filterType: $("filter-type"),
     filterDays: $("filter-days"),
@@ -63,6 +71,10 @@ function bindEvents() {
     document.querySelectorAll("[data-tab]").forEach((tab) => {
         tab.addEventListener("click", () => switchTab(tab.dataset.tab));
     });
+    document.querySelectorAll("[data-radar-mode]").forEach((button) => {
+        button.addEventListener("click", () => changeRadarMode(button.dataset.radarMode));
+    });
+    elements.everythingNew.addEventListener("click", () => switchTab("releases"));
     elements.libraryToggle.addEventListener("click", toggleLibraryPanel);
     elements.checkButton.addEventListener("click", startReleaseCheck);
     elements.scanButton.addEventListener("click", startScan);
@@ -88,6 +100,7 @@ function bindEvents() {
     document.addEventListener("click", (event) => {
         if (!event.target.closest(".artist-search")) hideSuggestions();
     });
+    window.addEventListener("pagehide", saveRadarImpressions);
 }
 
 async function api(url, options = {}) {
@@ -108,7 +121,7 @@ async function api(url, options = {}) {
 
 async function refreshDashboard() {
     try {
-        await Promise.all([fetchArtists(), fetchStats(), fetchReleases()]);
+        await Promise.all([fetchArtists(), fetchStats(), fetchReleases(), fetchRadar()]);
     } catch (error) {
         showToast(error.message || "Could not load SoundRadar.", "warning");
     }
@@ -131,6 +144,158 @@ async function fetchStats() {
         ? `${state.stats.unresolved_artists} matches need review`
         : "Library signal is clear";
     $("signal-detail").textContent = `${formatNumber(state.stats.visible_releases)} releases in this window`;
+}
+
+async function fetchRadar() {
+    elements.radarPicks.setAttribute("aria-busy", "true");
+    try {
+        const days = window.SOUNDRADAR_CONFIG?.lookbackDays || 90;
+        state.radar = await api(`/api/radar?mode=${encodeURIComponent(state.radarMode)}&days=${encodeURIComponent(days)}`);
+        renderRadar();
+    } finally {
+        elements.radarPicks.removeAttribute("aria-busy");
+    }
+}
+
+function changeRadarMode(mode) {
+    if (!mode || mode === state.radarMode) return;
+    state.radarMode = mode;
+    document.querySelectorAll("[data-radar-mode]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.radarMode === mode);
+    });
+    fetchRadar().catch((error) => showToast(error.message, "warning"));
+}
+
+function renderRadar() {
+    const radar = state.radar;
+    elements.radarPicks.replaceChildren();
+    elements.deeperListens.replaceChildren();
+    if (!radar) return;
+
+    const selected = formatNumber(radar.selected_count);
+    const tracks = formatNumber(radar.track_count);
+    const artists = formatNumber(radar.artist_count);
+    elements.radarSummary.textContent = radar.track_count
+        ? `${selected} ${radar.selected_count === 1 ? "pick" : "picks"} selected from ${tracks} new tracks across ${artists} ${radar.artist_count === 1 ? "artist" : "artists"}.`
+        : "Your Radar will appear after a release check finds song-level details.";
+
+    if (!radar.picks.length) {
+        const title = radar.track_count ? "You’re caught up." : "No song signal yet.";
+        const detail = radar.track_count
+            ? "Previously shown and rated tracks stay out of the way. Check again when new music lands."
+            : "Run Check releases to fetch recent tracks, then favorite a few artists to sharpen the ranking.";
+        elements.radarPicks.append(emptyState(title, detail));
+    } else {
+        const fragment = document.createDocumentFragment();
+        radar.picks.forEach((track, index) => {
+            state.displayedTrackIds.add(track.id);
+            fragment.append(createRadarCard(track, index));
+        });
+        elements.radarPicks.append(fragment);
+    }
+
+    const showDeeper = state.radarMode === "radar" && radar.deeper_listens.length > 0;
+    elements.deeperSection.classList.toggle("hidden", !showDeeper);
+    if (showDeeper) {
+        radar.deeper_listens.forEach((release) => elements.deeperListens.append(createDeeperCard(release)));
+    }
+}
+
+function createRadarCard(track, index) {
+    const card = create("article", "radar-track");
+    card.dataset.trackId = String(track.id);
+    const order = create("span", "track-order", String(index + 1).padStart(2, "0"));
+
+    const image = create("img", "track-cover");
+    image.src = safeImageUrl(track.cover_url);
+    image.alt = `${track.release_title} cover`;
+    image.loading = "lazy";
+    image.addEventListener("error", () => { image.src = "/static/default-avatar.svg"; }, { once: true });
+
+    const copy = create("div", "track-copy");
+    const reasons = create("div", "track-reasons");
+    track.reasons.forEach((reason) => reasons.append(create("span", "reason-chip", reason)));
+    const title = create("h4", "track-title", track.title);
+    const context = create("p", "track-context", `${track.artist_name} · ${track.release_title}`);
+    copy.append(reasons, title, context);
+
+    const actions = create("div", "track-actions");
+    const deezerLink = create("a", "listen-link", "Listen on Deezer ↗");
+    deezerLink.href = safeExternalUrl(track.link);
+    deezerLink.target = "_blank";
+    deezerLink.rel = "noopener noreferrer";
+    actions.append(
+        deezerLink,
+        feedbackButton("♡ Love it", "love", track),
+        feedbackButton("Not for me", "not_for_me", track),
+        feedbackButton("Already heard", "already_heard", track)
+    );
+
+    card.append(order, image, copy, actions);
+    return card;
+}
+
+function createDeeperCard(release) {
+    const card = create("a", "deeper-card");
+    card.href = safeExternalUrl(release.link);
+    card.target = "_blank";
+    card.rel = "noopener noreferrer";
+    const image = create("img");
+    image.src = safeImageUrl(release.cover_url);
+    image.alt = "";
+    image.loading = "lazy";
+    image.addEventListener("error", () => { image.src = "/static/default-avatar.svg"; }, { once: true });
+    const copy = create("span", "deeper-copy");
+    copy.append(
+        create("small", "", `${release.release_type} · ${release.reason}`),
+        create("strong", "", release.title),
+        create("span", "", release.artist_name)
+    );
+    card.append(image, copy, create("span", "deeper-arrow", "↗"));
+    return card;
+}
+
+function feedbackButton(label, feedback, track) {
+    const button = actionButton(label, () => submitTrackFeedback(track, feedback));
+    button.dataset.feedback = feedback;
+    return button;
+}
+
+async function submitTrackFeedback(track, feedback) {
+    const card = document.querySelector(`[data-track-id="${track.id}"]`);
+    const buttons = card ? card.querySelectorAll("button") : [];
+    buttons.forEach((button) => { button.disabled = true; });
+    try {
+        await api(`/api/tracks/${track.id}/feedback`, jsonOptions("POST", { feedback }));
+        if (feedback === "love") {
+            const love = card?.querySelector('[data-feedback="love"]');
+            if (love) {
+                love.textContent = "♥ Loved";
+                love.classList.add("selected");
+                love.disabled = false;
+            }
+            showToast(`Loved “${track.title}”. Future picks will learn from it.`);
+        } else {
+            state.radar.picks = state.radar.picks.filter((pick) => pick.id !== track.id);
+            state.radar.selected_count = state.radar.picks.length;
+            renderRadar();
+            showToast(feedback === "not_for_me" ? "Got it—less like this." : "Marked as already heard.");
+        }
+    } catch (error) {
+        buttons.forEach((button) => { button.disabled = false; });
+        showToast(error.message, "warning");
+    }
+}
+
+function saveRadarImpressions() {
+    const trackIds = [...state.displayedTrackIds];
+    if (!trackIds.length) return;
+    fetch("/api/radar/seen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ track_ids: trackIds }),
+        keepalive: true,
+    }).catch(() => {});
 }
 
 async function fetchReleases() {
@@ -278,26 +443,52 @@ function createArtistCard(artist) {
         ? `${formatNumber(artist.release_count)} releases · confirmed`
         : "Needs a Deezer match";
     const status = create("div", `artist-state${isConfirmed ? "" : " unresolved"}`, detail);
+    const affinity = [];
+    if (artist.library_track_count) affinity.push(`${formatNumber(artist.library_track_count)} library tracks`);
+    if (artist.library_album_count) affinity.push(`${formatNumber(artist.library_album_count)} albums`);
     copy.append(name, status);
+    if (affinity.length) copy.append(create("div", "artist-affinity", affinity.join(" · ")));
     if (!isConfirmed) {
         const match = actionButton("Find match", () => beginArtistMatch(artist.name));
         match.classList.add("match-button");
         copy.append(match);
     }
 
+    const controls = create("div", "artist-controls");
+    const favorite = create("button", `favorite-button${artist.favorite ? " active" : ""}`, artist.favorite ? "★" : "☆");
+    favorite.type = "button";
+    favorite.setAttribute("aria-pressed", String(Boolean(artist.favorite)));
+    favorite.setAttribute("aria-label", `${artist.favorite ? "Remove" : "Add"} ${artist.name} ${artist.favorite ? "from" : "to"} favorites`);
+    favorite.title = artist.favorite ? "Remove favorite" : "Mark as favorite";
+    favorite.addEventListener("click", () => toggleFavorite(artist));
+    favorite.disabled = !isConfirmed;
     const remove = create("button", "remove-button", "×");
     remove.type = "button";
     remove.setAttribute("aria-label", `Stop following ${artist.name}`);
     remove.title = "Stop following";
     remove.addEventListener("click", () => removeArtist(artist));
-    card.append(image, copy, remove);
+    controls.append(favorite, remove);
+    card.append(image, copy, controls);
     return card;
+}
+
+async function toggleFavorite(artist) {
+    const favorite = !Boolean(artist.favorite);
+    try {
+        await api(`/api/artists/${artist.id}/favorite`, jsonOptions("POST", { favorite }));
+        artist.favorite = favorite ? 1 : 0;
+        renderArtists();
+        await fetchRadar();
+        showToast(favorite ? `${artist.name} is now a favorite.` : `${artist.name} removed from favorites.`);
+    } catch (error) {
+        showToast(error.message, "warning");
+    }
 }
 
 async function updateReleaseStatus(releaseId, status) {
     try {
         await api(`/api/releases/${releaseId}/status`, jsonOptions("POST", { status }));
-        await Promise.all([fetchReleases(), fetchStats()]);
+        await Promise.all([fetchReleases(), fetchStats(), fetchRadar()]);
     } catch (error) {
         showToast(error.message, "warning");
     }
@@ -381,7 +572,7 @@ async function followArtist(artist) {
         }));
         elements.artistSearch.value = "";
         showToast(data.created ? `Following ${artist.name}.` : `${artist.name} is confirmed.`);
-        await Promise.all([fetchArtists(), fetchStats()]);
+        await Promise.all([fetchArtists(), fetchStats(), fetchRadar()]);
     } catch (error) {
         showToast(error.message, "warning");
     }
@@ -406,7 +597,7 @@ async function pollReleaseCheck() {
         const progress = data.total ? Math.round((data.processed / data.total) * 100) : 0;
         if (data.active) {
             const detail = data.total
-                ? `${data.processed} of ${data.total} confirmed artists · ${data.new_releases} new`
+                ? `${data.processed} of ${data.total} artists · ${data.new_releases} releases · ${data.new_tracks || 0} tracks`
                 : "Preparing confirmed artists";
             showJob("Release check", data.current_artist || "Checking catalogs…", detail, progress, true);
             state.checkTimer = setTimeout(pollReleaseCheck, 900);
@@ -415,7 +606,7 @@ async function pollReleaseCheck() {
             hideJob();
             if (data.finished_at) {
                 const suffix = data.skipped_unresolved ? ` ${data.skipped_unresolved} unresolved artists were safely skipped.` : "";
-                showToast(`Release check complete: ${data.new_releases} new.${suffix}`);
+                showToast(`Release check complete: ${data.new_releases} releases and ${data.new_tracks || 0} tracks added.${suffix}`);
                 if (data.errors?.length) showToast(`${data.errors.length} artists could not be checked.`, "warning");
                 await refreshDashboard();
             }
@@ -470,7 +661,7 @@ async function pollScan() {
             if (data.error) showToast(data.error, "warning");
             else if (data.finished_at) {
                 showToast(`Scan complete: ${data.artists_added} new artists added for review.`);
-                await Promise.all([fetchArtists(), fetchStats()]);
+                await Promise.all([fetchArtists(), fetchStats(), fetchRadar()]);
             }
         }
     } catch (error) {
@@ -515,12 +706,12 @@ function switchTab(tabName) {
         button.classList.toggle("active", selected);
         button.setAttribute("aria-selected", String(selected));
     });
-    const releasesSelected = tabName === "releases";
-    $("releases-pane").hidden = !releasesSelected;
-    $("releases-pane").classList.toggle("active", releasesSelected);
-    $("artists-pane").hidden = releasesSelected;
-    $("artists-pane").classList.toggle("active", !releasesSelected);
-    if (!releasesSelected) renderArtists();
+    ["radar", "releases", "artists"].forEach((name) => {
+        const selected = name === tabName;
+        $(`${name}-pane`).hidden = !selected;
+        $(`${name}-pane`).classList.toggle("active", selected);
+    });
+    if (tabName === "artists") renderArtists();
 }
 
 function toggleLibraryPanel() {
@@ -575,6 +766,16 @@ function safeImageUrl(value) {
         // Use the local fallback below.
     }
     return "/static/default-avatar.svg";
+}
+
+function safeExternalUrl(value) {
+    try {
+        const url = new URL(value);
+        if (url.protocol === "https:") return url.href;
+    } catch (_) {
+        // Use Deezer's home page when provider data is malformed.
+    }
+    return "https://www.deezer.com/";
 }
 
 function formatDate(value) {

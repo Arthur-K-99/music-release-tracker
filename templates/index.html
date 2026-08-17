@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0b0d0f">
-    <title>SoundRadar — Release Desk</title>
+    <title>SoundRadar — Your Radar</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2244%22 fill=%22%23ff6b35%22/><circle cx=%2250%22 cy=%2250%22 r=%2214%22 fill=%22%230b0d0f%22/></svg>">
     <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -18,7 +18,7 @@
                 <span class="brand-mark" aria-hidden="true"><span></span></span>
                 <span>
                     <strong>SoundRadar</strong>
-                    <small>Release desk</small>
+                    <small>Your music signal</small>
                 </span>
             </a>
 
@@ -41,7 +41,7 @@
                 <div class="hero-copy">
                     <p class="eyebrow">Your personal music signal</p>
                     <h1>New music.<br><em>Less noise.</em></h1>
-                    <p class="hero-description">A focused queue of recent and upcoming releases from artists you actually follow.</p>
+                    <p class="hero-description">A short, explainable set of songs worth your time—distilled from every new release on your desk.</p>
                 </div>
                 <div class="signal-card" aria-label="Library status">
                     <div class="signal-visual" aria-hidden="true">
@@ -95,7 +95,8 @@
             <section class="desk">
                 <div class="desk-header">
                     <div class="tabs" role="tablist" aria-label="SoundRadar views">
-                        <button class="tab active" id="releases-tab" data-tab="releases" role="tab" aria-selected="true">Release queue</button>
+                        <button class="tab active" id="radar-tab" data-tab="radar" role="tab" aria-selected="true">Your Radar</button>
+                        <button class="tab" id="releases-tab" data-tab="releases" role="tab" aria-selected="false">Everything new</button>
                         <button class="tab" id="artists-tab" data-tab="artists" role="tab" aria-selected="false">Artists</button>
                     </div>
                     <button id="toggle-library-btn" class="button button-quiet" type="button" aria-expanded="false">Library settings</button>
@@ -113,7 +114,44 @@
                     </div>
                 </div>
 
-                <div id="releases-pane" class="tab-pane active" role="tabpanel" aria-labelledby="releases-tab">
+                <div id="radar-pane" class="tab-pane active" role="tabpanel" aria-labelledby="radar-tab">
+                    <div class="radar-intro">
+                        <div>
+                            <p class="eyebrow">Your Radar</p>
+                            <h2>Start with these.</h2>
+                            <p id="radar-summary" class="radar-summary" aria-live="polite">Finding the clearest signals…</p>
+                        </div>
+                        <div class="radar-depth" role="group" aria-label="Radar detail level">
+                            <button class="depth-button" type="button" data-radar-mode="quick">Quick glance</button>
+                            <button class="depth-button active" type="button" data-radar-mode="radar">Your Radar</button>
+                            <button class="depth-button" id="everything-new-btn" type="button">Everything new</button>
+                        </div>
+                    </div>
+
+                    <section class="radar-section" aria-labelledby="best-bets-title">
+                        <div class="radar-section-heading">
+                            <div>
+                                <span class="radar-index">01</span>
+                                <h3 id="best-bets-title">Best Bets</h3>
+                            </div>
+                            <p>Recent songs ranked by favorites, your library, download history, and freshness.</p>
+                        </div>
+                        <div id="radar-picks" class="radar-picks" aria-live="polite" aria-busy="true"></div>
+                    </section>
+
+                    <section id="deeper-section" class="radar-section deeper-section hidden" aria-labelledby="deeper-title">
+                        <div class="radar-section-heading">
+                            <div>
+                                <span class="radar-index">02</span>
+                                <h3 id="deeper-title">Deeper Listens</h3>
+                            </div>
+                            <p>A tiny set of albums or EPs with enough signal to deserve the full listen.</p>
+                        </div>
+                        <div id="deeper-listens" class="deeper-listens"></div>
+                    </section>
+                </div>
+
+                <div id="releases-pane" class="tab-pane" role="tabpanel" aria-labelledby="releases-tab" hidden>
                     <div class="filter-bar">
                         <label>
                             <span>Status</span>
@@ -168,6 +206,7 @@
                         <div>
                             <p class="eyebrow">Your sources</p>
                             <h2>Followed artists</h2>
+                            <p class="section-note">Favorite the artists you never want your Radar to miss.</p>
                         </div>
                         <label class="compact-search">
                             <span class="sr-only">Filter followed artists</span>

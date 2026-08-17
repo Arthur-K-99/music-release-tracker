@@ -1,5 +1,7 @@
 import os
 import re
+from collections import Counter, defaultdict
+
 import mutagen
 
 SUPPORTED_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.mp4', '.ogg', '.opus', '.wav')
@@ -28,10 +30,11 @@ def extract_artist_from_filename(filename):
         return clean_artist_name(artist)
     return ""
 
-def scan_directory(directory_path, progress_callback=None):
-    artists = set()
+def scan_directory_summary(directory_path, progress_callback=None):
+    track_counts = Counter()
+    album_names = defaultdict(set)
     if not os.path.isdir(directory_path):
-        return list(artists)
+        return {"artists": [], "track_counts": {}, "album_counts": {}, "files_processed": 0}
 
     processed = 0
     for root, _, files in os.walk(directory_path):
@@ -42,11 +45,14 @@ def scan_directory(directory_path, progress_callback=None):
             processed += 1
             filepath = os.path.join(root, file)
             tag_artist = ""
+            tag_album = ""
             try:
                 # Load with easy=True for a unified dictionary interface
                 audio = mutagen.File(filepath, easy=True)
                 if audio and 'artist' in audio and audio['artist']:
                     tag_artist = audio['artist'][0]
+                if audio and 'album' in audio and audio['album']:
+                    tag_album = audio['album'][0].strip()
             except Exception:
                 pass
                 
@@ -56,14 +62,26 @@ def scan_directory(directory_path, progress_callback=None):
                 artist = extract_artist_from_filename(file)
                 
             if artist and artist.lower() not in ('unknown', 'various artists', 'various', 'va'):
-                artists.add(artist)
+                track_counts[artist] += 1
+                if tag_album:
+                    album_names[artist].add(tag_album.casefold())
 
             if progress_callback and (processed == 1 or processed % 50 == 0):
-                progress_callback(processed, len(artists), filepath)
+                progress_callback(processed, len(track_counts), filepath)
 
     if progress_callback:
-        progress_callback(processed, len(artists), "")
-    return sorted(list(artists))
+        progress_callback(processed, len(track_counts), "")
+    artists = sorted(track_counts, key=str.casefold)
+    return {
+        "artists": artists,
+        "track_counts": dict(track_counts),
+        "album_counts": {artist: len(album_names[artist]) for artist in artists},
+        "files_processed": processed,
+    }
+
+
+def scan_directory(directory_path, progress_callback=None):
+    return scan_directory_summary(directory_path, progress_callback)["artists"]
 
 if __name__ == "__main__":
     import sys
